@@ -164,6 +164,7 @@ typedef struct a653sched_priv_s
 static int dom_handle_cmp(const xen_domain_handle_t h1,
                           const xen_domain_handle_t h2)
 {
+    MD_PRINT();
     return memcmp(h1, h2, sizeof(xen_domain_handle_t));
 }
 
@@ -186,7 +187,7 @@ static struct vcpu *find_vcpu(
     int vcpu_id)
 {
     arinc653_vcpu_t *avcpu;
-
+    MD_PRINT();
     /* loop through the vcpu_list looking for the specified VCPU */
     list_for_each_entry ( avcpu, &SCHED_PRIV(ops)->vcpu_list, list )
         if ( (dom_handle_cmp(avcpu->vc->domain->handle, handle) == 0)
@@ -206,7 +207,7 @@ static struct vcpu *find_vcpu(
 static void update_schedule_vcpus(const struct scheduler *ops)
 {
     unsigned int i, n_entries = SCHED_PRIV(ops)->num_schedule_entries;
-
+    MD_PRINT();
     for ( i = 0; i < n_entries; i++ )
         SCHED_PRIV(ops)->schedule[i].vc =
             find_vcpu(ops,
@@ -235,7 +236,7 @@ arinc653_sched_set(
     unsigned int i;
     unsigned long flags;
     int rc = -EINVAL;
-
+    MD_PRINT();
     spin_lock_irqsave(&sched_priv->lock, flags);
 
     /* Check for valid major frame and number of schedule entries. */
@@ -311,7 +312,7 @@ arinc653_sched_get(
     a653sched_priv_t *sched_priv = SCHED_PRIV(ops);
     unsigned int i;
     unsigned long flags;
-
+    MD_PRINT();
     spin_lock_irqsave(&sched_priv->lock, flags);
 
     schedule->num_sched_entries = sched_priv->num_schedule_entries;
@@ -348,7 +349,7 @@ static int
 a653sched_init(struct scheduler *ops)
 {
     a653sched_priv_t *prv;
-
+    MD_PRINT();
     prv = xzalloc(a653sched_priv_t);
     if ( prv == NULL )
         return -ENOMEM;
@@ -370,6 +371,7 @@ a653sched_init(struct scheduler *ops)
 static void
 a653sched_deinit(const struct scheduler *ops)
 {
+    MD_PRINT();
     xfree(SCHED_PRIV(ops));
 }
 
@@ -387,7 +389,7 @@ a653sched_alloc_vdata(const struct scheduler *ops, struct vcpu *vc, void *dd)
     arinc653_vcpu_t *svc;
     unsigned int entry;
     unsigned long flags;
-
+    MD_PRINT();
     /*
      * Allocate memory for the ARINC 653-specific scheduler data information
      * associated with the given VCPU (vc).
@@ -444,7 +446,7 @@ static void
 a653sched_free_vdata(const struct scheduler *ops, void *priv)
 {
     arinc653_vcpu_t *av = priv;
-
+    MD_PRINT();
     if (av == NULL)
         return;
 
@@ -468,6 +470,7 @@ a653sched_free_vdata(const struct scheduler *ops, void *priv)
 static void *
 a653sched_alloc_pdata(const struct scheduler *ops, int cpu)
 {
+        MD_PRINT();
     /* return a non-NULL value to keep schedule.c happy */
     return SCHED_PRIV(ops);
 }
@@ -481,6 +484,7 @@ static void
 a653sched_free_pdata(const struct scheduler *ops, void *pcpu, int cpu)
 {
     /* nop */
+        MD_PRINT();
 }
 
 /**
@@ -496,6 +500,7 @@ a653sched_free_pdata(const struct scheduler *ops, void *pcpu, int cpu)
 static void *
 a653sched_alloc_domdata(const struct scheduler *ops, struct domain *dom)
 {
+        MD_PRINT();
     /* return a non-NULL value to keep schedule.c happy */
     return SCHED_PRIV(ops);
 }
@@ -509,6 +514,7 @@ static void
 a653sched_free_domdata(const struct scheduler *ops, void *data)
 {
     /* nop */
+    MD_PRINT();
 }
 
 /**
@@ -520,6 +526,7 @@ a653sched_free_domdata(const struct scheduler *ops, void *data)
 static void
 a653sched_vcpu_sleep(const struct scheduler *ops, struct vcpu *vc)
 {
+    MD_PRINT();
     if ( AVCPU(vc) != NULL )
         AVCPU(vc)->awake = 0;
 
@@ -540,6 +547,7 @@ a653sched_vcpu_sleep(const struct scheduler *ops, struct vcpu *vc)
 static void
 a653sched_vcpu_wake(const struct scheduler *ops, struct vcpu *vc)
 {
+    MD_PRINT();
     if ( AVCPU(vc) != NULL )
         AVCPU(vc)->awake = 1;
 
@@ -570,7 +578,7 @@ a653sched_do_schedule(
     a653sched_priv_t *sched_priv = SCHED_PRIV(ops);
     const unsigned int cpu = smp_processor_id();
     unsigned long flags;
-
+    MD_PRINT();
     spin_lock_irqsave(&sched_priv->lock, flags);
 
     if ( sched_priv->num_schedule_entries < 1 )
@@ -663,7 +671,7 @@ a653sched_pick_cpu(const struct scheduler *ops, struct vcpu *vc)
 {
     cpumask_t *online;
     unsigned int cpu;
-
+    MD_PRINT();
     /* 
      * If present, prefer vc's current processor, else
      * just find the first valid vcpu .
@@ -693,7 +701,7 @@ a653sched_adjust_global(const struct scheduler *ops,
 {
     xen_sysctl_arinc653_schedule_t local_sched;
     int rc = -EINVAL;
-
+    MD_PRINT();
     switch ( sc->cmd )
     {
     case XEN_SYSCTL_SCHEDOP_putinfo:

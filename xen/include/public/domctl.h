@@ -349,6 +349,8 @@ DEFINE_XEN_GUEST_HANDLE(xen_domctl_max_vcpus_t);
 #define XEN_SCHEDULER_CREDIT2  6
 #define XEN_SCHEDULER_ARINC653 7
 #define XEN_SCHEDULER_RTDS     8
+#define XEN_SCHEDULER_COSCH    9
+#define XEN_SCHEDULER_ROBIN    10
 
 /* Set or get info? */
 #define XEN_DOMCTL_SCHEDOP_putinfo 0

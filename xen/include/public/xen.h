@@ -684,7 +684,6 @@ struct shared_info {
     uint32_t wc_nsec;         /* Nsecs 00:00:00 UTC, Jan 1, 1970.  */
 
     struct arch_shared_info arch;
-
 };
 #ifndef __XEN__
 typedef struct shared_info shared_info_t;

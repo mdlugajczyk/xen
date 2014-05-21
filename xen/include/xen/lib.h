@@ -13,7 +13,8 @@ void __warn(char *file, int line);
 
 #define BUG_ON(p)  do { if (unlikely(p)) BUG();  } while (0)
 #define WARN_ON(p) do { if (unlikely(p)) WARN(); } while (0)
-
+#define MD_PRINT() ; //printk("DIAGNOSTIC CALL: %s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
+ 
 #if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
 /* Force a compilation error if condition is true */
 #define BUILD_BUG_ON(cond) ({ _Static_assert(!(cond), "!(" #cond ")"); })

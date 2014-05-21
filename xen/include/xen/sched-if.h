@@ -10,6 +10,16 @@
 
 #include <xen/percpu.h>
 
+
+struct cosch_vcpu_private {
+    struct list_head runq_elem;
+    long msgs;
+    struct vcpu *vcpu;
+    bool_t awake;
+};
+
+#define COSCH_VCPU_PRIV(vc) ((struct cosch_vcpu_private *)((vc)->sched_priv))
+
 /* A global pointer to the initial cpupool (POOL0). */
 extern struct cpupool *cpupool0;
 
@@ -165,6 +175,8 @@ struct scheduler {
     void         (*tick_resume)     (const struct scheduler *, unsigned int);
 };
 
+extern const struct scheduler sched_cosch_def;
+extern const struct scheduler sched_robin_def;
 extern const struct scheduler sched_sedf_def;
 extern const struct scheduler sched_credit_def;
 extern const struct scheduler sched_credit2_def;

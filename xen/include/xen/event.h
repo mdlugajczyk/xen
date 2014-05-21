@@ -86,7 +86,7 @@ void arch_evtchn_inject(struct vcpu *v);
 #define bucket_from_port(d, p) \
     ((group_from_port(d, p))[((p) % EVTCHNS_PER_GROUP) / EVTCHNS_PER_BUCKET])
 
-static inline bool_t port_is_valid(struct domain *d, unsigned int p)
+inline bool_t port_is_valid(struct domain *d, unsigned int p)
 {
     if ( p >= d->max_evtchns )
         return 0;
@@ -97,7 +97,7 @@ static inline bool_t port_is_valid(struct domain *d, unsigned int p)
     return group_from_port(d, p) != NULL && bucket_from_port(d, p) != NULL;
 }
 
-static inline struct evtchn *evtchn_from_port(struct domain *d, unsigned int p)
+inline struct evtchn *evtchn_from_port(struct domain *d, unsigned int p)
 {
     if ( p < EVTCHNS_PER_BUCKET )
         return &d->evtchn[p];

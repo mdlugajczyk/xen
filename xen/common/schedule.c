@@ -39,7 +39,7 @@
 #include <xsm/xsm.h>
 
 /* opt_sched: scheduler - default to credit */
-static char __initdata opt_sched[10] = "credit";
+static char __initdata opt_sched[10] = "cosch";
 string_param("sched", opt_sched);
 
 /* if sched_smt_power_savings is set,
@@ -65,13 +65,14 @@ DEFINE_PER_CPU(struct schedule_data, schedule_data);
 DEFINE_PER_CPU(struct scheduler *, scheduler);
 
 static const struct scheduler *schedulers[] = {
+    &sched_cosch_def,
+    &sched_robin_def,
     &sched_sedf_def,
     &sched_credit_def,
     &sched_credit2_def,
     &sched_arinc653_def,
     &sched_rtds_def,
 };
-
 static struct scheduler __read_mostly ops;
 
 #define SCHED_OP(opsptr, fn, ...)                                          \
@@ -86,7 +87,7 @@ static inline void trace_runstate_change(struct vcpu *v, int new_state)
 {
     struct { uint32_t vcpu:16, domain:16; } d;
     uint32_t event;
-
+    MD_PRINT();
     if ( likely(!tb_init_done) )
         return;
 
@@ -103,7 +104,7 @@ static inline void trace_runstate_change(struct vcpu *v, int new_state)
 static inline void trace_continue_running(struct vcpu *v)
 {
     struct { uint32_t vcpu:16, domain:16; } d;
-
+    MD_PRINT();
     if ( likely(!tb_init_done) )
         return;
 
@@ -115,6 +116,7 @@ static inline void trace_continue_running(struct vcpu *v)
 
 static inline void vcpu_urgent_count_update(struct vcpu *v)
 {
+    MD_PRINT();
     if ( is_idle_vcpu(v) )
         return;
 
@@ -142,7 +144,7 @@ static inline void vcpu_runstate_change(
     struct vcpu *v, int new_state, s_time_t new_entry_time)
 {
     s_time_t delta;
-
+    MD_PRINT();
     ASSERT(v->runstate.state != new_state);
     ASSERT(spin_is_locked(per_cpu(schedule_data,v->processor).schedule_lock));
 
@@ -164,7 +166,7 @@ void vcpu_runstate_get(struct vcpu *v, struct vcpu_runstate_info *runstate)
 {
     spinlock_t *lock = likely(v == current) ? NULL : vcpu_schedule_lock_irq(v);
     s_time_t delta;
-
+    MD_PRINT();
     memcpy(runstate, &v->runstate, sizeof(*runstate));
     delta = NOW() - runstate->state_entry_time;
     if ( delta > 0 )
@@ -178,7 +180,7 @@ uint64_t get_cpu_idle_time(unsigned int cpu)
 {
     struct vcpu_runstate_info state = { 0 };
     struct vcpu *v = idle_vcpu[cpu];
-
+    MD_PRINT();
     if ( cpu_online(cpu) && v )
         vcpu_runstate_get(v, &state);
 
@@ -188,7 +190,7 @@ uint64_t get_cpu_idle_time(unsigned int cpu)
 int sched_init_vcpu(struct vcpu *v, unsigned int processor) 
 {
     struct domain *d = v->domain;
-
+    MD_PRINT();
     /*
      * Initialize processor and affinity settings. The idler, and potentially
      * domain-0 VCPUs, are pinned onto their respective physical CPUs.
@@ -242,7 +244,7 @@ int sched_move_domain(struct domain *d, struct cpupool *c)
     void *vcpudata;
     struct scheduler *old_ops;
     void *old_domdata;
-
+    MD_PRINT();
     domdata = SCHED_OP(c->sched, alloc_domdata, d);
     if ( domdata == NULL )
         return -ENOMEM;
@@ -330,6 +332,7 @@ int sched_move_domain(struct domain *d, struct cpupool *c)
 
 void sched_destroy_vcpu(struct vcpu *v)
 {
+    MD_PRINT();
     kill_timer(&v->periodic_timer);
     kill_timer(&v->singleshot_timer);
     kill_timer(&v->poll_timer);
@@ -341,12 +344,14 @@ void sched_destroy_vcpu(struct vcpu *v)
 
 int sched_init_domain(struct domain *d)
 {
+    MD_PRINT();
     SCHED_STAT_CRANK(dom_init);
     return SCHED_OP(DOM2OP(d), init_domain, d);
 }
 
 void sched_destroy_domain(struct domain *d)
 {
+    MD_PRINT();
     SCHED_STAT_CRANK(dom_destroy);
     SCHED_OP(DOM2OP(d), destroy_domain, d);
 }
@@ -355,7 +360,7 @@ void vcpu_sleep_nosync(struct vcpu *v)
 {
     unsigned long flags;
     spinlock_t *lock = vcpu_schedule_lock_irqsave(v, &flags);
-
+    MD_PRINT();
     if ( likely(!vcpu_runnable(v)) )
     {
         if ( v->runstate.state == RUNSTATE_runnable )
@@ -371,6 +376,7 @@ void vcpu_sleep_nosync(struct vcpu *v)
 
 void vcpu_sleep_sync(struct vcpu *v)
 {
+    MD_PRINT();
     vcpu_sleep_nosync(v);
 
     while ( !vcpu_runnable(v) && v->is_running )
@@ -383,26 +389,33 @@ void vcpu_wake(struct vcpu *v)
 {
     unsigned long flags;
     spinlock_t *lock = vcpu_schedule_lock_irqsave(v, &flags);
-
+    MD_PRINT();
     if ( likely(vcpu_runnable(v)) )
     {
+        MD_PRINT();
         if ( v->runstate.state >= RUNSTATE_blocked )
             vcpu_runstate_change(v, RUNSTATE_runnable, NOW());
+        MD_PRINT();
         SCHED_OP(VCPU2OP(v), wake, v);
+        MD_PRINT();
     }
     else if ( !test_bit(_VPF_blocked, &v->pause_flags) )
     {
+        MD_PRINT();
         if ( v->runstate.state == RUNSTATE_blocked )
             vcpu_runstate_change(v, RUNSTATE_offline, NOW());
+        MD_PRINT();
     }
-
+    MD_PRINT();
     vcpu_schedule_unlock_irqrestore(lock, flags, v);
-
+    MD_PRINT();
     TRACE_2D(TRC_SCHED_WAKE, v->domain->domain_id, v->vcpu_id);
+    MD_PRINT();
 }
 
 void vcpu_unblock(struct vcpu *v)
 {
+    MD_PRINT();
     if ( !test_and_clear_bit(_VPF_blocked, &v->pause_flags) )
         return;
 
@@ -428,7 +441,7 @@ static void vcpu_migrate(struct vcpu *v)
     unsigned int old_cpu, new_cpu;
     spinlock_t *old_lock, *new_lock;
     bool_t pick_called = 0;
-
+    MD_PRINT();
     old_cpu = new_cpu = v->processor;
     for ( ; ; )
     {
@@ -548,7 +561,7 @@ static void vcpu_migrate(struct vcpu *v)
 void vcpu_force_reschedule(struct vcpu *v)
 {
     spinlock_t *lock = vcpu_schedule_lock_irq(v);
-
+    MD_PRINT();
     if ( v->is_running )
         set_bit(_VPF_migrating, &v->pause_flags);
     vcpu_schedule_unlock_irq(lock, v);
@@ -563,7 +576,7 @@ void vcpu_force_reschedule(struct vcpu *v)
 void restore_vcpu_affinity(struct domain *d)
 {
     struct vcpu *v;
-
+    MD_PRINT();
     for_each_vcpu ( d, v )
     {
         spinlock_t *lock = vcpu_schedule_lock_irq(v);
@@ -602,7 +615,7 @@ int cpu_disable_scheduler(unsigned int cpu)
     struct cpupool *c;
     cpumask_t online_affinity;
     int    ret = 0;
-
+    MD_PRINT();
     c = per_cpu(cpupool, cpu);
     if ( c == NULL )
         return ret;
@@ -706,7 +719,7 @@ int vcpu_set_soft_affinity(struct vcpu *v, const cpumask_t *affinity)
 void vcpu_block(void)
 {
     struct vcpu *v = current;
-
+    MD_PRINT();
     set_bit(_VPF_blocked, &v->pause_flags);
 
     /* Check for events /after/ blocking: avoids wakeup waiting race. */
@@ -723,17 +736,20 @@ void vcpu_block(void)
 
 static void vcpu_block_enable_events(void)
 {
+    MD_PRINT();
     local_event_delivery_enable();
     vcpu_block();
 }
 
 static long do_poll(struct sched_poll *sched_poll)
 {
+
     struct vcpu   *v = current;
     struct domain *d = v->domain;
     evtchn_port_t  port;
     long           rc;
     unsigned int   i;
+    MD_PRINT();
 
     /* Fairly arbitrary limit. */
     if ( sched_poll->nr_ports > 128 )
@@ -802,9 +818,10 @@ static long do_poll(struct sched_poll *sched_poll)
 /* Voluntarily yield the processor for this allocation. */
 long vcpu_yield(void)
 {
+
     struct vcpu * v=current;
     spinlock_t *lock = vcpu_schedule_lock_irq(v);
-
+    MD_PRINT();
     SCHED_OP(VCPU2OP(v), yield, v);
     vcpu_schedule_unlock_irq(lock, v);
 
@@ -816,7 +833,7 @@ long vcpu_yield(void)
 static void domain_watchdog_timeout(void *data)
 {
     struct domain *d = data;
-
+    MD_PRINT();
     if ( d->is_shutting_down || d->is_dying )
         return;
 
@@ -826,6 +843,7 @@ static void domain_watchdog_timeout(void *data)
 
 static long domain_watchdog(struct domain *d, uint32_t id, uint32_t timeout)
 {
+    MD_PRINT();
     if ( id > NR_DOMAIN_WATCHDOG_TIMERS )
         return -EINVAL;
 
@@ -868,7 +886,7 @@ static long domain_watchdog(struct domain *d, uint32_t id, uint32_t timeout)
 void watchdog_domain_init(struct domain *d)
 {
     unsigned int i;
-
+    MD_PRINT();
     spin_lock_init(&d->watchdog_lock);
 
     d->watchdog_inuse_map = 0;
@@ -880,7 +898,7 @@ void watchdog_domain_init(struct domain *d)
 void watchdog_domain_destroy(struct domain *d)
 {
     unsigned int i;
-
+    MD_PRINT();
     for ( i = 0; i < NR_DOMAIN_WATCHDOG_TIMERS; i++ )
         kill_timer(&d->watchdog_timer[i]);
 }
@@ -888,7 +906,7 @@ void watchdog_domain_destroy(struct domain *d)
 long do_sched_op_compat(int cmd, unsigned long arg)
 {
     long ret = 0;
-
+    MD_PRINT();
     switch ( cmd )
     {
     case SCHEDOP_yield:
@@ -925,7 +943,7 @@ typedef long ret_t;
 ret_t do_sched_op(int cmd, XEN_GUEST_HANDLE_PARAM(void) arg)
 {
     ret_t ret = 0;
-
+    MD_PRINT();
     switch ( cmd )
     {
     case SCHEDOP_yield:
@@ -1047,6 +1065,7 @@ long do_set_timer_op(s_time_t timeout)
 {
     struct vcpu *v = current;
     s_time_t offset = timeout - NOW();
+    MD_PRINT();
 
     if ( timeout == 0 )
     {
@@ -1083,14 +1102,16 @@ long do_set_timer_op(s_time_t timeout)
 /* sched_id - fetch ID of current scheduler */
 int sched_id(void)
 {
+    MD_PRINT();
     return ops.sched_id;
 }
 
 /* Adjust scheduling parameter for a given domain. */
 long sched_adjust(struct domain *d, struct xen_domctl_scheduler_op *op)
 {
-    long ret;
 
+    long ret;
+    MD_PRINT();
     ret = xsm_domctl_scheduler_op(XSM_HOOK, d, op->cmd);
     if ( ret )
         return ret;
@@ -1110,9 +1131,10 @@ long sched_adjust(struct domain *d, struct xen_domctl_scheduler_op *op)
 
 long sched_adjust_global(struct xen_sysctl_scheduler_op *op)
 {
+
     struct cpupool *pool;
     int rc;
-
+    MD_PRINT();
     rc = xsm_sysctl_scheduler_op(XSM_HOOK, op->cmd);
     if ( rc )
         return rc;
@@ -1135,9 +1157,10 @@ long sched_adjust_global(struct xen_sysctl_scheduler_op *op)
 
 static void vcpu_periodic_timer_work(struct vcpu *v)
 {
+
     s_time_t now = NOW();
     s_time_t periodic_next_event;
-
+    MD_PRINT();
     if ( v->periodic_period == 0 )
         return;
 
@@ -1170,7 +1193,7 @@ static void schedule(void)
     spinlock_t           *lock;
     struct task_slice     next_slice;
     int cpu = smp_processor_id();
-
+    MD_PRINT();
     ASSERT_NOT_IN_ATOMIC();
 
     SCHED_STAT_CRANK(sched_run);
@@ -1265,6 +1288,7 @@ static void schedule(void)
 
 void context_saved(struct vcpu *prev)
 {
+    MD_PRINT();
     /* Clear running flag /after/ writing context to memory. */
     smp_wmb();
 
@@ -1282,6 +1306,7 @@ void context_saved(struct vcpu *prev)
 /* The scheduler timer: force a run through the scheduler */
 static void s_timer_fn(void *unused)
 {
+    MD_PRINT();
     raise_softirq(SCHEDULE_SOFTIRQ);
     SCHED_STAT_CRANK(sched_irq);
 }
@@ -1290,6 +1315,7 @@ static void s_timer_fn(void *unused)
 static void vcpu_periodic_timer_fn(void *data)
 {
     struct vcpu *v = data;
+    MD_PRINT();
     vcpu_periodic_timer_work(v);
 }
 
@@ -1297,6 +1323,7 @@ static void vcpu_periodic_timer_fn(void *data)
 static void vcpu_singleshot_timer_fn(void *data)
 {
     struct vcpu *v = data;
+    MD_PRINT();
     send_timer_event(v);
 }
 
@@ -1304,7 +1331,7 @@ static void vcpu_singleshot_timer_fn(void *data)
 static void poll_timer_fn(void *data)
 {
     struct vcpu *v = data;
-
+    MD_PRINT();
     if ( test_and_clear_bit(v->vcpu_id, v->domain->poll_mask) )
         vcpu_unblock(v);
 }
@@ -1312,7 +1339,7 @@ static void poll_timer_fn(void *data)
 static int cpu_schedule_up(unsigned int cpu)
 {
     struct schedule_data *sd = &per_cpu(schedule_data, cpu);
-
+    MD_PRINT();
     per_cpu(scheduler, cpu) = &ops;
     spin_lock_init(&sd->_lock);
     sd->schedule_lock = &sd->_lock;
@@ -1339,7 +1366,7 @@ static int cpu_schedule_up(unsigned int cpu)
 static void cpu_schedule_down(unsigned int cpu)
 {
     struct schedule_data *sd = &per_cpu(schedule_data, cpu);
-
+    MD_PRINT();
     if ( sd->sched_priv != NULL )
         SCHED_OP(&ops, free_pdata, sd->sched_priv, cpu);
 
@@ -1351,7 +1378,7 @@ static int cpu_schedule_callback(
 {
     unsigned int cpu = (unsigned long)hcpu;
     int rc = 0;
-
+    MD_PRINT();
     switch ( action )
     {
     case CPU_UP_PREPARE:
@@ -1377,7 +1404,7 @@ void __init scheduler_init(void)
 {
     struct domain *idle_domain;
     int i;
-
+    MD_PRINT();
     open_softirq(SCHEDULE_SOFTIRQ, schedule);
 
     for ( i = 0; i < ARRAY_SIZE(schedulers); i++ )
@@ -1440,7 +1467,7 @@ int schedule_cpu_switch(unsigned int cpu, struct cpupool *c)
     void *ppriv, *ppriv_old, *vpriv, *vpriv_old;
     struct scheduler *old_ops = per_cpu(scheduler, cpu);
     struct scheduler *new_ops = (c == NULL) ? &ops : c->sched;
-
+    MD_PRINT();
     if ( old_ops == new_ops )
         return 0;
 
@@ -1476,6 +1503,7 @@ int schedule_cpu_switch(unsigned int cpu, struct cpupool *c)
 
 struct scheduler *scheduler_get_default(void)
 {
+    MD_PRINT();
     return &ops;
 }
 
@@ -1483,7 +1511,7 @@ struct scheduler *scheduler_alloc(unsigned int sched_id, int *perr)
 {
     int i;
     struct scheduler *sched;
-
+    MD_PRINT();
     for ( i = 0; i < ARRAY_SIZE(schedulers); i++ )
         if ( schedulers[i] && schedulers[i]->sched_id == sched_id )
             goto found;
@@ -1506,6 +1534,7 @@ struct scheduler *scheduler_alloc(unsigned int sched_id, int *perr)
 
 void scheduler_free(struct scheduler *sched)
 {
+    MD_PRINT();
     BUG_ON(sched == &ops);
     SCHED_OP(sched, deinit);
     xfree(sched);
@@ -1516,7 +1545,7 @@ void schedule_dump(struct cpupool *c)
     int               i;
     struct scheduler *sched;
     cpumask_t        *cpus;
-
+    MD_PRINT();
     sched = (c == NULL) ? &ops : c->sched;
     cpus = cpupool_scheduler_cpumask(c);
     printk("Scheduler: %s (%s)\n", sched->name, sched->opt_name);
@@ -1536,7 +1565,7 @@ void sched_tick_suspend(void)
 {
     struct scheduler *sched;
     unsigned int cpu = smp_processor_id();
-
+    MD_PRINT();
     sched = per_cpu(scheduler, cpu);
     SCHED_OP(sched, tick_suspend, cpu);
 }
@@ -1545,13 +1574,14 @@ void sched_tick_resume(void)
 {
     struct scheduler *sched;
     unsigned int cpu = smp_processor_id();
-
+    MD_PRINT();
     sched = per_cpu(scheduler, cpu);
     SCHED_OP(sched, tick_resume, cpu);
 }
 
 void wait(void)
 {
+    MD_PRINT();
     schedule();
 }
 
