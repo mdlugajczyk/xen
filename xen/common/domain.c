@@ -154,17 +154,26 @@ struct vcpu *alloc_vcpu(
     {
         sched_destroy_vcpu(v);
  fail_wq:
+        MD_PRINT();
         destroy_waitqueue_vcpu(v);
+        MD_PRINT();
  fail_free:
+        MD_PRINT();
         free_cpumask_var(v->cpu_affinity);
+        MD_PRINT();
         free_cpumask_var(v->cpu_affinity_tmp);
+        MD_PRINT();
         free_cpumask_var(v->cpu_affinity_saved);
+        MD_PRINT();
         free_cpumask_var(v->vcpu_dirty_cpumask);
+        MD_PRINT();
         free_vcpu_struct(v);
+        MD_PRINT();
         return NULL;
     }
-
+    MD_PRINT();
     d->vcpu[vcpu_id] = v;
+    MD_PRINT();
     if ( vcpu_id != 0 )
     {
         int prev_id = v->vcpu_id - 1;
@@ -174,12 +183,12 @@ struct vcpu *alloc_vcpu(
         v->next_in_list = d->vcpu[prev_id]->next_in_list;
         d->vcpu[prev_id]->next_in_list = v;
     }
-
+    MD_PRINT();
     /* Must be called after making new vcpu visible to for_each_vcpu(). */
     vcpu_check_shutdown(v);
-
+    MD_PRINT();
     domain_update_node_affinity(d);
-
+    MD_PRINT();
     return v;
 }
 
