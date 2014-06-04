@@ -4747,6 +4747,12 @@ static int sched_arinc653_domain_set(libxl__gc *gc, uint32_t domid,
     return 0;
 }
 
+static int sched_cosch_domain_set(libxl__gc *gc, uint32_t domid,
+                                     const libxl_domain_sched_params *scinfo)
+{
+    return 0;
+}
+
 static int sched_credit_domain_get(libxl__gc *gc, uint32_t domid,
                                    libxl_domain_sched_params *scinfo)
 {
@@ -5016,6 +5022,9 @@ int libxl_domain_sched_params_set(libxl_ctx *ctx, uint32_t domid,
         break;
     case LIBXL_SCHEDULER_ARINC653:
         ret=sched_arinc653_domain_set(gc, domid, scinfo);
+        break;
+    case LIBXL_SCHEDULER_COSCH:
+        ret=sched_cosch_domain_set(gc, domid, scinfo);
         break;
     default:
         LOG(ERROR, "Unknown scheduler");
