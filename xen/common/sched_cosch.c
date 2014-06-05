@@ -72,7 +72,7 @@ cosch_remove_vcpu(const struct scheduler *ops, struct vcpu *v)
     
     for (i = 0; i < last_vcpu; i++)
     {
-        if ( vcpus[i]->vcpu == v )
+        if ( vcpus[i] && vcpus[i]->vcpu == v )
         {
             vcpus[i] = NULL;
             break;
@@ -105,7 +105,8 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
         next = vcpus[current_vcpu];
         current_vcpu++;
         current_vcpu = current_vcpu % last_vcpu;
-        if ( vcpu_runnable(next->vcpu) && !next->vcpu->is_running && next->awake && next->vcpu->processor == cpu)
+
+        if ( next && vcpu_runnable(next->vcpu) && !next->vcpu->is_running && next->awake && next->vcpu->processor == cpu)
         {
             ret.task = next->vcpu;
             break;
