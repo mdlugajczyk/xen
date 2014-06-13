@@ -6,6 +6,7 @@
 #include <xen/time.h>
 #include <xen/errno.h>
 
+static const s_time_t DEFAULT_TIMESLICE = MILLISECS(5);
 
 struct cosch_private {
     spinlock_t lock;
@@ -98,7 +99,7 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
 
     spin_lock_irqsave(&prv->lock, flags);
     ret.migrated = 0;
-    ret.time = MILLISECS(30);
+    ret.time = DEFAULT_TIMESLICE;
     ret.task = NULL;
     for (i = 0; i < last_vcpu; i++)
     {
