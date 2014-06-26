@@ -122,7 +122,7 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
     if ( ret.task == NULL || tasklet_work_scheduled )
     {
 	ret.task = idle_vcpu[cpu];
-        ret.time = SECONDS(1);
+	//        ret.time = SECONDS(1);
     }
 
     spin_unlock_irqrestore(&prv->lock, flags);
