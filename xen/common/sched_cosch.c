@@ -17,13 +17,18 @@ struct cosch_vcpu_private {
     bool_t awake;
 };
 
-static struct cosch_vcpu_private *vcpus[256];
-static unsigned int current_vcpu = 0;
-static unsigned int last_vcpu = 0;
+struct cosch_cpu_private {
+  struct cosch_vcpu_private *vcpus[256];
+  unsigned int current_vcpu;
+  unsigned int last_vcpu;
+};
 
 #define COSCH_PRIV(_ops) \
     ((struct cosch_private *)((_ops)->sched_data))
 
+#define COSCH_PCPU(_c) \
+    ((struct cosch_cpu_private *)per_cpu(schedule_data, _c).sched_priv)
+  
 #define COSCH_VCPU_PRIV(vc) ((struct cosch_vcpu_private *)((vc)->sched_priv))
 
 static int
@@ -45,9 +50,10 @@ static void
 cosch_insert_vcpu(const struct scheduler *ops, struct vcpu *v)
 {
     unsigned long flags;
+    struct cosch_cpu_private *cpu_priv = COSCH_PCPU(v->processor);
     struct cosch_private *prv = COSCH_PRIV(ops);
     MD_PRINT();
-
+      
     if (is_idle_vcpu(v) )
     {
 	return;
@@ -55,8 +61,8 @@ cosch_insert_vcpu(const struct scheduler *ops, struct vcpu *v)
 
     spin_lock_irqsave(&prv->lock, flags);
     
-    vcpus[last_vcpu] = COSCH_VCPU_PRIV(v);
-    last_vcpu++;
+    cpu_priv->vcpus[cpu_priv->last_vcpu] = COSCH_VCPU_PRIV(v);
+    cpu_priv->last_vcpu++;
 
     spin_unlock_irqrestore(&prv->lock, flags);
 }
@@ -66,16 +72,18 @@ cosch_remove_vcpu(const struct scheduler *ops, struct vcpu *v)
 {
     unsigned int i;
     unsigned long flags;
+    const int cpu = smp_processor_id();
+    struct cosch_cpu_private *cpu_priv = COSCH_PCPU(cpu);
     struct cosch_private *prv = COSCH_PRIV(ops);
     MD_PRINT();
 
     spin_lock_irqsave(&prv->lock, flags);
     
-    for (i = 0; i < last_vcpu; i++)
+    for (i = 0; i < cpu_priv->last_vcpu; i++)
     {
-        if ( vcpus[i] && vcpus[i]->vcpu == v )
+        if ( cpu_priv->vcpus[i] && cpu_priv->vcpus[i]->vcpu == v )
         {
-            vcpus[i] = NULL;
+            cpu_priv->vcpus[i] = NULL;
             break;
         }
     }
@@ -90,6 +98,7 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
 {
     unsigned int i;
     const int cpu = smp_processor_id();
+    struct cosch_cpu_private *cpu_priv = COSCH_PCPU(cpu);
     struct task_slice ret;
     struct cosch_vcpu_private *next = NULL;
     unsigned long flags;
@@ -101,11 +110,11 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
     ret.migrated = 0;
     ret.time = DEFAULT_TIMESLICE;
     ret.task = NULL;
-    for (i = 0; i < last_vcpu; i++)
+    for (i = 0; i < cpu_priv->last_vcpu; i++)
     {
-        next = vcpus[current_vcpu];
-        current_vcpu++;
-        current_vcpu = current_vcpu % last_vcpu;
+        next = cpu_priv->vcpus[cpu_priv->current_vcpu];
+        cpu_priv->current_vcpu++;
+        cpu_priv->current_vcpu = cpu_priv->current_vcpu % cpu_priv->last_vcpu;
 
         if ( next && vcpu_runnable(next->vcpu) && !next->vcpu->is_running && next->awake && next->vcpu->processor == cpu)
         {
@@ -122,13 +131,12 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
     if ( ret.task == NULL || tasklet_work_scheduled )
     {
 	ret.task = idle_vcpu[cpu];
-	//        ret.time = SECONDS(1);
     }
 
     spin_unlock_irqrestore(&prv->lock, flags);
-    printk("new vcpu: %d %d %d next index: %d state: %d for time: %ld\n", ret.task->vcpu_id, ret.task->processor,
-           ret.task->domain->domain_id, current_vcpu, ret.task->runstate.state, ret.time);
-    printk("Total number of vcpus: %d current_cpu: %d\n", last_vcpu,cpu);
+    /* printk("new vcpu: %d %d %d next index: %d state: %d for time: %ld\n", ret.task->vcpu_id, ret.task->processor, */
+    /*        ret.task->domain->domain_id, cpu_priv->current_vcpu, ret.task->runstate.state, ret.time); */
+    /* printk("Total number of vcpus: %d current_cpu: %d\n", cpu_priv->last_vcpu,cpu); */
 
     return ret;
 }
@@ -160,8 +168,16 @@ cosched_free_vdata(const struct scheduler *ops, void *priv)
 static void *
 cosched_alloc_pdata(const struct scheduler *ops, int cpu)
 {
+    struct cosch_cpu_private *pcpu = xzalloc(struct cosch_cpu_private);
     MD_PRINT();
-    return xzalloc(struct vcpu);
+    
+    if (pcpu == NULL)
+      return pcpu;
+
+    pcpu->current_vcpu = 0;
+    pcpu->last_vcpu = 0;
+
+    return pcpu;
 }
 
 static void
