@@ -6,7 +6,7 @@
 #include <xen/time.h>
 #include <xen/errno.h>
 
-static const s_time_t DEFAULT_TIMESLICE = MILLISECS(1);
+static const s_time_t DEFAULT_TIMESLICE = MILLISECS(5);
 
 struct cosch_private {
     spinlock_t lock;
