@@ -6,7 +6,7 @@
 #include <xen/time.h>
 #include <xen/errno.h>
 
-static const s_time_t DEFAULT_TIMESLICE = MILLISECS(5);
+static const s_time_t DEFAULT_TIMESLICE = MILLISECS(1);
 
 struct cosch_private {
     spinlock_t lock;
@@ -15,6 +15,7 @@ struct cosch_private {
 struct cosch_vcpu_private {
     struct vcpu *vcpu;
     bool_t awake;
+  //    s_time_t start_time;
 };
 
 struct cosch_cpu_private {
@@ -88,6 +89,8 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
     struct vcpu *curr = per_cpu(schedule_data, cpu).curr;
     MD_PRINT();
 
+    //    printk("vcpu: %d run for: %"PRIu64" %"PRIu64"\n", curr->vcpu_id, now - COSCH_VCPU_PRIV(curr)->start_time, DEFAULT_TIMESLICE);
+    
     spin_lock_irqsave(&cpu_priv->lock, flags);
     ret.migrated = 0;
     ret.time = DEFAULT_TIMESLICE;
@@ -115,6 +118,7 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
 	ret.task = idle_vcpu[cpu];
     }
 
+    //    COSCH_VCPU_PRIV(ret.task)->start_time = now;
     spin_unlock_irqrestore(&cpu_priv->lock, flags);
     /* printk("new vcpu: %d %d %d next index: %d state: %d for time: %ld\n", ret.task->vcpu_id, ret.task->processor, */
     /*        ret.task->domain->domain_id, cpu_priv->current_vcpu, ret.task->runstate.state, ret.time); */
