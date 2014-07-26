@@ -168,6 +168,7 @@ struct scheduler {
 };
 
 extern const struct scheduler sched_cosch_def;
+extern const struct scheduler sched_robin_def;
 extern const struct scheduler sched_sedf_def;
 extern const struct scheduler sched_credit_def;
 extern const struct scheduler sched_credit2_def;

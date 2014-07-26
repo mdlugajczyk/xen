@@ -66,6 +66,7 @@ DEFINE_PER_CPU(struct scheduler *, scheduler);
 
 static const struct scheduler *schedulers[] = {
     &sched_cosch_def,
+    &sched_robin_def,
     &sched_sedf_def,
     &sched_credit_def,
     &sched_credit2_def,
