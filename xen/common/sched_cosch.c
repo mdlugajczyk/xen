@@ -14,6 +14,7 @@ struct cosch_private {
 
 struct cosch_cpu_private {
     struct list_head runq;
+    long run_cnt;
     struct cosch_vcpu_private *vcpus[256];
     unsigned int current_vcpu;
     unsigned int last_vcpu;
@@ -96,13 +97,24 @@ static void restore_runq(struct cosch_cpu_private *cpu_priv)
 	if (vcpu != NULL)
 	    __runq_insert_sort(&cpu_priv->runq, &vcpu->runq_elem);
     }
+
+    cpu_priv->run_cnt++;
+
+    if ( cpu_priv->run_cnt % 3 == 0)
+    {
+	for (i = 0; i < cpu_priv->last_vcpu; i++)
+	{
+	    vcpu = cpu_priv->vcpus[i];
+	    if (vcpu != NULL)
+		vcpu->msgs = 0;
+	}
+    }
 }
 
 static struct task_slice
 cosch_do_schedule(const struct scheduler *ops, s_time_t now, 
           bool_t tasklet_work_scheduled)
 {
-//    unsigned int i;
     const int cpu = smp_processor_id();
     struct cosch_cpu_private *cpu_priv = COSCH_PCPU(cpu);
     struct task_slice ret;
@@ -121,17 +133,9 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
     if (list_empty(&cpu_priv->runq))
     {
 	restore_runq(cpu_priv);
-//	printk("new runq:\n");
-	list_for_each( cur_elem, &cpu_priv->runq )
-	{
-	    /* printk("(%ld, %d) ", list_entry(cur_elem, struct cosch_vcpu_private, runq_elem)->msgs, */
-	    /* 	   list_entry(cur_elem, struct cosch_vcpu_private, runq_elem)->vcpu->domain->domain_id);  */
-	    list_entry(cur_elem, struct cosch_vcpu_private,
-		       runq_elem)->msgs=0;
-	}
-	/* printk("\n"); */
     }
 
+    // select next vcpu
     list_for_each_safe (cur_elem, tmp_elem, &cpu_priv->runq)
     {
 	next = list_entry (cur_elem, struct cosch_vcpu_private, runq_elem);
@@ -196,6 +200,7 @@ cosched_alloc_pdata(const struct scheduler *ops, int cpu)
 
     pcpu->current_vcpu = 0;
     pcpu->last_vcpu = 0;
+    pcpu->run_cnt = 0;
     INIT_LIST_HEAD(&pcpu->runq);
     spin_lock_init(&pcpu->lock);
     
