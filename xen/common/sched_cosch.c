@@ -12,17 +12,12 @@ struct cosch_private {
     spinlock_t lock;
 };
 
-struct cosch_vcpu_private {
-    struct vcpu *vcpu;
-    bool_t awake;
-  //    s_time_t start_time;
-};
-
 struct cosch_cpu_private {
-  struct cosch_vcpu_private *vcpus[256];
-  unsigned int current_vcpu;
-  unsigned int last_vcpu;
-  spinlock_t lock;
+    struct list_head runq;
+    struct cosch_vcpu_private *vcpus[256];
+    unsigned int current_vcpu;
+    unsigned int last_vcpu;
+    spinlock_t lock;
 };
 
 #define COSCH_PRIV(_ops) \
@@ -31,8 +26,6 @@ struct cosch_cpu_private {
 #define COSCH_PCPU(_c) \
     ((struct cosch_cpu_private *)per_cpu(schedule_data, _c).sched_priv)
   
-#define COSCH_VCPU_PRIV(vc) ((struct cosch_vcpu_private *)((vc)->sched_priv))
-
 static int
 cosch_init(struct scheduler *ops)
 {
@@ -46,11 +39,6 @@ cosch_init(struct scheduler *ops)
     spin_lock_init(&prv->lock);
     MD_PRINT();
     return 0;
-}
-
-static void
-cosch_insert_vcpu(const struct scheduler *ops, struct vcpu *v)
-{
 }
 
 static void
@@ -76,36 +64,84 @@ cosch_remove_vcpu(const struct scheduler *ops, struct vcpu *v)
     MD_PRINT();
 }
 
+static inline void
+__runq_insert_sort(struct list_head *list, struct list_head *element)
+{
+    struct list_head     *cur;
+
+    /* Iterate through all elements to find our "hole" */
+    list_for_each( cur, list )
+    {
+	struct cosch_vcpu_private *d1, *d2;
+//	printk("runq insert sort for each iteration\n");
+
+	d1 = list_entry(element,struct cosch_vcpu_private, runq_elem);
+	d2 = list_entry(cur,struct cosch_vcpu_private, runq_elem);
+	
+        if ( d1->msgs >= d2->msgs)
+            break;
+    }
+    /* cur now contains the element, before which we'll enqueue */
+    list_add(element, cur->prev);
+}
+
+static void restore_runq(struct cosch_cpu_private *cpu_priv)
+{
+    int i;
+    struct cosch_vcpu_private *vcpu;
+
+    for (i = 0; i < cpu_priv->last_vcpu; i++)
+    {
+	vcpu = cpu_priv->vcpus[i];
+	if (vcpu != NULL)
+	    __runq_insert_sort(&cpu_priv->runq, &vcpu->runq_elem);
+    }
+}
+
 static struct task_slice
 cosch_do_schedule(const struct scheduler *ops, s_time_t now, 
           bool_t tasklet_work_scheduled)
 {
-    unsigned int i;
+//    unsigned int i;
     const int cpu = smp_processor_id();
     struct cosch_cpu_private *cpu_priv = COSCH_PCPU(cpu);
     struct task_slice ret;
     struct cosch_vcpu_private *next = NULL;
     unsigned long flags;
     struct vcpu *curr = per_cpu(schedule_data, cpu).curr;
+    struct list_head     *cur_elem, *tmp_elem;
     MD_PRINT();
 
-    //    printk("vcpu: %d run for: %"PRIu64" %"PRIu64"\n", curr->vcpu_id, now - COSCH_VCPU_PRIV(curr)->start_time, DEFAULT_TIMESLICE);
-    
     spin_lock_irqsave(&cpu_priv->lock, flags);
     ret.migrated = 0;
     ret.time = DEFAULT_TIMESLICE;
     ret.task = NULL;
-    for (i = 0; i < cpu_priv->last_vcpu; i++)
-    {
-        next = cpu_priv->vcpus[cpu_priv->current_vcpu];
-        cpu_priv->current_vcpu++;
-        cpu_priv->current_vcpu = cpu_priv->current_vcpu % cpu_priv->last_vcpu;
 
-        if ( next && vcpu_runnable(next->vcpu) && !next->vcpu->is_running && next->awake && next->vcpu->processor == cpu)
-        {
-            ret.task = next->vcpu;
-            break;
-        }
+    // schedule-cycle has finished. reorder the runq.
+    if (list_empty(&cpu_priv->runq))
+    {
+	restore_runq(cpu_priv);
+//	printk("new runq:\n");
+	list_for_each( cur_elem, &cpu_priv->runq )
+	{
+	    /* printk("(%ld, %d) ", list_entry(cur_elem, struct cosch_vcpu_private, runq_elem)->msgs, */
+	    /* 	   list_entry(cur_elem, struct cosch_vcpu_private, runq_elem)->vcpu->domain->domain_id);  */
+	    list_entry(cur_elem, struct cosch_vcpu_private,
+		       runq_elem)->msgs=0;
+	}
+	/* printk("\n"); */
+    }
+
+    list_for_each_safe (cur_elem, tmp_elem, &cpu_priv->runq)
+    {
+	next = list_entry (cur_elem, struct cosch_vcpu_private, runq_elem);
+	list_del_init(cur_elem);
+	
+	if ( next && vcpu_runnable(next->vcpu) && !next->vcpu->is_running && next->awake && next->vcpu->processor == cpu)
+	{
+	    ret.task = next->vcpu;
+	    break;
+	}
     }
 
     if (ret.task == NULL && vcpu_runnable(curr))
@@ -118,11 +154,7 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
 	ret.task = idle_vcpu[cpu];
     }
 
-    //    COSCH_VCPU_PRIV(ret.task)->start_time = now;
     spin_unlock_irqrestore(&cpu_priv->lock, flags);
-    /* printk("new vcpu: %d %d %d next index: %d state: %d for time: %ld\n", ret.task->vcpu_id, ret.task->processor, */
-    /*        ret.task->domain->domain_id, cpu_priv->current_vcpu, ret.task->runstate.state, ret.time); */
-    /* printk("Total number of vcpus: %d current_cpu: %d\n", cpu_priv->last_vcpu,cpu); */
 
     return ret;
 }
@@ -139,6 +171,8 @@ cosched_alloc_vdata(const struct scheduler *ops, struct vcpu *vc, void *dd)
 
     ret->awake = 0;
     ret->vcpu = vc;
+    ret->msgs = 0;
+    INIT_LIST_HEAD(&ret->runq_elem);
     MD_PRINT();
     return ret;
 }
@@ -159,10 +193,12 @@ cosched_alloc_pdata(const struct scheduler *ops, int cpu)
     
     if (pcpu == NULL)
       return pcpu;
-    printk("PCPU for cpu: %d\n", cpu);
+
     pcpu->current_vcpu = 0;
     pcpu->last_vcpu = 0;
+    INIT_LIST_HEAD(&pcpu->runq);
     spin_lock_init(&pcpu->lock);
+    
     return pcpu;
 }
 
@@ -251,7 +287,6 @@ const struct scheduler sched_cosch_def = {
     .free_pdata    = cosched_free_pdata,
     .alloc_domdata    = cosched_alloc_domdata,
     .free_domdata    = cosched_free_domdata,
-    .insert_vcpu = cosch_insert_vcpu,
     .remove_vcpu = cosch_remove_vcpu,
 
     .init = cosch_init,
