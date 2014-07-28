@@ -122,12 +122,25 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
     unsigned long flags;
     struct vcpu *curr = per_cpu(schedule_data, cpu).curr;
     struct list_head     *cur_elem, *tmp_elem;
+    s_time_t runtime;
     MD_PRINT();
 
+    
+    runtime = now - current->runstate.state_entry_time;
     spin_lock_irqsave(&cpu_priv->lock, flags);
     ret.migrated = 0;
     ret.time = DEFAULT_TIMESLICE;
     ret.task = NULL;
+
+    if ( !tasklet_work_scheduled
+         && vcpu_runnable(current)
+         && !is_idle_vcpu(current)
+         && runtime < DEFAULT_TIMESLICE)
+    {
+        ret.task = curr;
+        ret.migrated = 0;
+        goto out;
+    }
 
     // schedule-cycle has finished. reorder the runq.
     if (list_empty(&cpu_priv->runq))
@@ -147,7 +160,8 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
 	    break;
 	}
     }
-
+    
+ out:
     if (ret.task == NULL && vcpu_runnable(curr))
     {
 	ret.task = curr;
