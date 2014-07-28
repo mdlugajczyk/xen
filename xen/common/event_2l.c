@@ -44,8 +44,6 @@ static void evtchn_2l_set_pending(struct vcpu *v, struct evtchn *evtchn)
 
 static void evtchn_2l_clear_pending(struct domain *d, struct evtchn *evtchn)
 {
-    if ( evtchn->state == ECS_INTERDOMAIN )
-        COSCH_VCPU_PRIV(d->vcpu[evtchn->notify_vcpu_id])->msgs--;
     clear_bit(evtchn->port, &shared_info(d, evtchn_pending));
 }
 
