@@ -5,6 +5,7 @@
 #include <xen/softirq.h>
 #include <xen/time.h>
 #include <xen/errno.h>
+#include <xen/event.h>
 
 static const s_time_t DEFAULT_TIMESLICE = MILLISECS(1);
 
@@ -20,6 +21,25 @@ struct cosch_cpu_private {
     unsigned int last_vcpu;
     spinlock_t lock;
 };
+
+
+static int
+get_virq_num(const struct vcpu *v)
+{
+    struct domain *d = v->domain;
+    int rc = 0;
+    int port;
+
+     for ( port = 0; port_is_valid(d, port); port++ )
+       {
+	 struct evtchn *chn = evtchn_from_port(d, port);
+	 if ( chn->state == ECS_INTERDOMAIN && d->evtchn_port_ops->is_pending(d,chn))
+	   rc++;
+       }
+     
+    return rc;
+}
+
 
 #define COSCH_PRIV(_ops) \
     ((struct cosch_private *)((_ops)->sched_data))
@@ -95,7 +115,10 @@ static void restore_runq(struct cosch_cpu_private *cpu_priv)
     {
 	vcpu = cpu_priv->vcpus[i];
 	if (vcpu != NULL)
+	{
+	    vcpu->msgs = get_virq_num(vcpu->vcpu);
 	    __runq_insert_sort(&cpu_priv->runq, &vcpu->runq_elem);
+	}
     }
 
     cpu_priv->run_cnt++;
