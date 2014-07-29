@@ -35,7 +35,7 @@ static void evtchn_2l_set_pending(struct vcpu *v, struct evtchn *evtchn)
                            &vcpu_info(v, evtchn_pending_sel)) )
     {
         vcpu_mark_events_pending(v);
-        if ( evtchn->state == ECS_INTERDOMAIN )
+        if ( evtchn->state == ECS_VIRQ )
             COSCH_VCPU_PRIV(v)->msgs++;
     }
 

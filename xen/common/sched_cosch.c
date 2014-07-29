@@ -100,7 +100,7 @@ static void restore_runq(struct cosch_cpu_private *cpu_priv)
 
     cpu_priv->run_cnt++;
 
-    if ( cpu_priv->run_cnt % 7 == 0)
+    if ( cpu_priv->run_cnt % 3 == 0)
     {
 	for (i = 0; i < cpu_priv->last_vcpu; i++)
 	{
