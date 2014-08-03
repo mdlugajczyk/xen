@@ -684,6 +684,7 @@ struct shared_info {
     uint32_t wc_nsec;         /* Nsecs 00:00:00 UTC, Jan 1, 1970.  */
 
     struct arch_shared_info arch;
+    unsigned long network_intensity[10];
 
 };
 #ifndef __XEN__

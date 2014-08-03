@@ -23,22 +23,22 @@ struct cosch_cpu_private {
 };
 
 
-static int
-get_virq_num(const struct vcpu *v)
-{
-    struct domain *d = v->domain;
-    int rc = 0;
-    int port;
+/* static int */
+/* get_virq_num(const struct vcpu *v) */
+/* { */
+/*     struct domain *d = v->domain; */
+/*     int rc = 0; */
+/*     int port; */
 
-     for ( port = 0; port_is_valid(d, port); port++ )
-       {
-	 struct evtchn *chn = evtchn_from_port(d, port);
-	 if ( chn->state == ECS_INTERDOMAIN && d->evtchn_port_ops->is_pending(d,chn))
-	   rc++;
-       }
+/*      for ( port = 0; port_is_valid(d, port); port++ ) */
+/*        { */
+/* 	 struct evtchn *chn = evtchn_from_port(d, port); */
+/* 	 if ( chn->state == ECS_INTERDOMAIN && d->evtchn_port_ops->is_pending(d,chn)) */
+/* 	   rc++; */
+/*        } */
      
-    return rc;
-}
+/*     return rc; */
+/* } */
 
 
 #define COSCH_PRIV(_ops) \
@@ -114,10 +114,9 @@ static void restore_runq(struct cosch_cpu_private *cpu_priv)
     for (i = 0; i < cpu_priv->last_vcpu; i++)
     {
 	vcpu = cpu_priv->vcpus[i];
-	if (vcpu != NULL)
+	if (vcpu != NULL )
 	{
-	    vcpu->msgs = get_virq_num(vcpu->vcpu);
-	    __runq_insert_sort(&cpu_priv->runq, &vcpu->runq_elem);
+	  __runq_insert_sort(&cpu_priv->runq, &vcpu->runq_elem);
 	}
     }
 
@@ -148,7 +147,6 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
     s_time_t runtime;
     MD_PRINT();
 
-    
     runtime = now - current->runstate.state_entry_time;
     spin_lock_irqsave(&cpu_priv->lock, flags);
     ret.migrated = 0;
@@ -165,40 +163,62 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
         goto out;
     }
 
-    // schedule-cycle has finished. reorder the runq.
-    if (list_empty(&cpu_priv->runq))
+    if (current->domain->shared_info != NULL)
     {
-	restore_runq(cpu_priv);
+      int i;
+      printk("%d MESSAGES: ", current->domain->domain_id);
+      for ( i = 0; i < 10; i++)
+      	{
+
+	  //	    printk("%lu ", current->domain->shared_info->native.network_intensity[i]);
+	  printk("%lu ", shared_info(current->domain, network_intensity[i]));
+      	}
+      	printk("\n");
+
+	/* printk("%d MESSAGES: ", current->domain->domain_id); */
+
+	/* for ( i = 0; i < 10; i++) */
+	/* { */
+
+	/*     printk("%lu ", current->domain->shared_info->native.network_intensity[i]); */
+	/* } */
+	/* printk("\n"); */
     }
 
-    // select next vcpu
-    list_for_each_safe (cur_elem, tmp_elem, &cpu_priv->runq)
-    {
-	next = list_entry (cur_elem, struct cosch_vcpu_private, runq_elem);
-	list_del_init(cur_elem);
-	
-	if ( next && vcpu_runnable(next->vcpu) && !next->vcpu->is_running && next->awake && next->vcpu->processor == cpu)
+	// schedule-cycle has finished. reorder the runq.
+	if (list_empty(&cpu_priv->runq))
 	{
-	    ret.task = next->vcpu;
-	    break;
+	    restore_runq(cpu_priv);
 	}
-    }
-    
- out:
-    if (ret.task == NULL && vcpu_runnable(curr))
-    {
-	ret.task = curr;
-    }
-    
-    if ( ret.task == NULL || tasklet_work_scheduled )
-    {
-	ret.task = idle_vcpu[cpu];
-    }
 
-    spin_unlock_irqrestore(&cpu_priv->lock, flags);
+	// select next vcpu
+	list_for_each_safe (cur_elem, tmp_elem, &cpu_priv->runq)
+	{
+	    next = list_entry (cur_elem, struct cosch_vcpu_private, runq_elem);
+	    list_del_init(cur_elem);
+	
+	    if ( next && vcpu_runnable(next->vcpu) && !next->vcpu->is_running && next->awake && next->vcpu->processor == cpu)
+	    {
+		ret.task = next->vcpu;
+		break;
+	    }
+	}
+    
+    out:
+	if (ret.task == NULL && vcpu_runnable(curr))
+	{
+	    ret.task = curr;
+	}
+    
+	if ( ret.task == NULL || tasklet_work_scheduled )
+	{
+	    ret.task = idle_vcpu[cpu];
+	}
 
-    return ret;
-}
+	spin_unlock_irqrestore(&cpu_priv->lock, flags);
+
+	return ret;
+    }
 
 static void *
 cosched_alloc_vdata(const struct scheduler *ops, struct vcpu *vc, void *dd)
