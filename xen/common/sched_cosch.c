@@ -94,7 +94,6 @@ __runq_insert_sort(struct list_head *list, struct list_head *element)
     list_for_each( cur, list )
     {
 	struct cosch_vcpu_private *d1, *d2;
-//	printk("runq insert sort for each iteration\n");
 
 	d1 = list_entry(element,struct cosch_vcpu_private, runq_elem);
 	d2 = list_entry(cur,struct cosch_vcpu_private, runq_elem);
@@ -165,60 +164,49 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
 
     if (current->domain->shared_info != NULL)
     {
-      int i;
-      printk("%d MESSAGES: ", current->domain->domain_id);
-      for ( i = 0; i < 10; i++)
-      	{
-
-	  //	    printk("%lu ", current->domain->shared_info->native.network_intensity[i]);
-	  printk("%lu ", shared_info(current->domain, network_intensity[i]));
-      	}
-      	printk("\n");
-
-	/* printk("%d MESSAGES: ", current->domain->domain_id); */
-
-	/* for ( i = 0; i < 10; i++) */
-	/* { */
-
-	/*     printk("%lu ", current->domain->shared_info->native.network_intensity[i]); */
-	/* } */
-	/* printk("\n"); */
+	int i;
+	printk("%d MESSAGES: ", current->domain->domain_id);
+	for ( i = 0; i < 10; i++)
+	{
+	    printk("%d ", shared_info(current->domain, network_intensity[i]));
+	}
+	printk("\n");
     }
 
-	// schedule-cycle has finished. reorder the runq.
-	if (list_empty(&cpu_priv->runq))
-	{
-	    restore_runq(cpu_priv);
-	}
+    // schedule-cycle has finished. reorder the runq.
+    if (list_empty(&cpu_priv->runq))
+    {
+	restore_runq(cpu_priv);
+    }
 
-	// select next vcpu
-	list_for_each_safe (cur_elem, tmp_elem, &cpu_priv->runq)
-	{
-	    next = list_entry (cur_elem, struct cosch_vcpu_private, runq_elem);
-	    list_del_init(cur_elem);
+    // select next vcpu
+    list_for_each_safe (cur_elem, tmp_elem, &cpu_priv->runq)
+    {
+	next = list_entry (cur_elem, struct cosch_vcpu_private, runq_elem);
+	list_del_init(cur_elem);
 	
-	    if ( next && vcpu_runnable(next->vcpu) && !next->vcpu->is_running && next->awake && next->vcpu->processor == cpu)
-	    {
-		ret.task = next->vcpu;
-		break;
-	    }
-	}
-    
-    out:
-	if (ret.task == NULL && vcpu_runnable(curr))
+	if ( next && vcpu_runnable(next->vcpu) && !next->vcpu->is_running && next->awake && next->vcpu->processor == cpu)
 	{
-	    ret.task = curr;
+	    ret.task = next->vcpu;
+	    break;
 	}
-    
-	if ( ret.task == NULL || tasklet_work_scheduled )
-	{
-	    ret.task = idle_vcpu[cpu];
-	}
-
-	spin_unlock_irqrestore(&cpu_priv->lock, flags);
-
-	return ret;
     }
+    
+out:
+    if (ret.task == NULL && vcpu_runnable(curr))
+    {
+	ret.task = curr;
+    }
+    
+    if ( ret.task == NULL || tasklet_work_scheduled )
+    {
+	ret.task = idle_vcpu[cpu];
+    }
+
+    spin_unlock_irqrestore(&cpu_priv->lock, flags);
+
+    return ret;
+}
 
 static void *
 cosched_alloc_vdata(const struct scheduler *ops, struct vcpu *vc, void *dd)
