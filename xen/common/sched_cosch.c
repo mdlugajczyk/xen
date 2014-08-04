@@ -161,18 +161,7 @@ cosch_do_schedule(const struct scheduler *ops, s_time_t now,
         ret.migrated = 0;
         goto out;
     }
-
-    if (current->domain->shared_info != NULL)
-    {
-	int i;
-	printk("%d MESSAGES: ", current->domain->domain_id);
-	for ( i = 0; i < 10; i++)
-	{
-	    printk("%d ", shared_info(current->domain, network_intensity[i]));
-	}
-	printk("\n");
-    }
-
+    
     // schedule-cycle has finished. reorder the runq.
     if (list_empty(&cpu_priv->runq))
     {
