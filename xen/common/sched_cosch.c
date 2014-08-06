@@ -23,23 +23,22 @@ struct cosch_cpu_private {
 };
 
 
-/* static int */
-/* get_virq_num(const struct vcpu *v) */
-/* { */
-/*     struct domain *d = v->domain; */
-/*     int rc = 0; */
-/*     int port; */
+static int
+get_virq_num(const struct vcpu *v)
+{
+    struct domain *d = v->domain;
+    int rc = 0;
+    int port;
 
-/*      for ( port = 0; port_is_valid(d, port); port++ ) */
-/*        { */
-/* 	 struct evtchn *chn = evtchn_from_port(d, port); */
-/* 	 if ( chn->state == ECS_INTERDOMAIN && d->evtchn_port_ops->is_pending(d,chn)) */
-/* 	   rc++; */
-/*        } */
+     for ( port = 0; port_is_valid(d, port); port++ )
+       {
+	 struct evtchn *chn = evtchn_from_port(d, port);
+	 if ( chn->state == ECS_INTERDOMAIN )
+	   rc++;
+       }
      
-/*     return rc; */
-/* } */
-
+    return rc;
+}
 
 #define COSCH_PRIV(_ops) \
     ((struct cosch_private *)((_ops)->sched_data))
@@ -115,21 +114,22 @@ static void restore_runq(struct cosch_cpu_private *cpu_priv)
 	vcpu = cpu_priv->vcpus[i];
 	if (vcpu != NULL )
 	{
+	  vcpu->msgs = get_virq_num(vcpu);
 	  __runq_insert_sort(&cpu_priv->runq, &vcpu->runq_elem);
 	}
     }
 
-    cpu_priv->run_cnt++;
+    /* cpu_priv->run_cnt++; */
 
-    if ( cpu_priv->run_cnt % 3 == 0)
-    {
-	for (i = 0; i < cpu_priv->last_vcpu; i++)
-	{
-	    vcpu = cpu_priv->vcpus[i];
-	    if (vcpu != NULL)
-		vcpu->msgs = 0;
-	}
-    }
+    /* if ( cpu_priv->run_cnt % 3 == 0) */
+    /* { */
+    /* 	for (i = 0; i < cpu_priv->last_vcpu; i++) */
+    /* 	{ */
+    /* 	    vcpu = cpu_priv->vcpus[i]; */
+    /* 	    if (vcpu != NULL) */
+    /* 		vcpu->msgs = 0; */
+    /* 	} */
+    /* } */
 }
 
 static struct task_slice
