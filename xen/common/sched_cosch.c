@@ -33,7 +33,7 @@ get_virq_num(const struct vcpu *v)
      for ( port = 0; port_is_valid(d, port); port++ )
        {
 	 struct evtchn *chn = evtchn_from_port(d, port);
-	 if ( chn->state == ECS_INTERDOMAIN )
+	 if ( chn->state == ECS_INTERDOMAIN || chn->state == ECS_VIRQ )
 	   rc++;
        }
      
