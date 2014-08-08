@@ -114,7 +114,7 @@ static void restore_runq(struct cosch_cpu_private *cpu_priv)
 	vcpu = cpu_priv->vcpus[i];
 	if (vcpu != NULL )
 	{
-	  vcpu->msgs = get_virq_num(vcpu);
+	  vcpu->msgs = get_virq_num(vcpu->vcpu);
 	  __runq_insert_sort(&cpu_priv->runq, &vcpu->runq_elem);
 	}
     }
